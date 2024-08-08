@@ -1,0 +1,126 @@
+version: '2.1'
+services:
+  wireguard:
+    image: linuxserver/wireguard
+    container_name: wireguard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    environment:
+      - PUID=1001
+      - PGID=1001
+      - VIRTUAL_HOST=x.x.x.x
+      - VIRTUAL_PORT=9091
+      - TZ=America/New_York
+    volumes:
+      - /opt/torrent/docker/volumes/wireguard/config:/config
+      - /opt/torrent/lib/modules:/lib/modules
+    ports:
+      - 51820:51820/udp
+      - 8112:8112
+      - 6881:6881
+      - 6881:6881/udp
+      - 7878:7878
+      - 9117:9117
+      - 8989:8989
+      - 9696:9696
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv6.conf.all.disable_ipv6=0
+    restart: unless-stopped
+ 
+  deluge:
+    image: lscr.io/linuxserver/deluge:latest
+    container_name: deluge
+    environment:
+      - PUID=1001
+      - PGID=1008
+      - TZ=America/New_York
+      - DELUGE_LOGLEVEL=error
+    volumes:
+      - /opt/torrent/docker/volumes/deluge/config:/config
+      - /mnt/share/torrents:/downloads
+    depends_on:
+      - wireguard
+    network_mode: service:wireguard
+    restart: unless-stopped
+
+  nginx-proxy:
+    image: jwilder/nginx-proxy:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - /opt/torrent/docker/volumes/nginx-proxy/certs:/etc/nginx/certs
+      - /opt/torrent/docker/volumes/nginx-proxy/dhparam:/etc/nginx/dhparam
+      - /opt/torrent/docker/volumes/nginx-proxy/vhost.d:/etc/nginx/vhost.d
+      - /opt/torrent/docker/volumes/nginx-proxy/conf.d:/etc/nginx/conf.d
+      - /opt/torrent/docker/volumes/nginx-proxy/html:/usr/share/nginx/html
+      - /opt/torrent/docker/volumes/nginx-proxy/htpasswd:/etc/nginx/htpasswd
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
+
+  radarr:
+    container_name: radarr
+    image: linuxserver/radarr
+    restart: always
+    environment:
+     - TZ=America/New_York
+     - PUID=1001
+     - PGID=1008
+    volumes:
+     - /etc/localtime:/etc/localtime:ro
+     - /opt/radarr/config:/config
+     - /mnt/share/movies:/movies
+     - /mnt/share/torrents:/downloads
+    depends_on:
+     - wireguard
+    network_mode: service:wireguard
+  
+  jackett:
+    container_name: jackett
+    image: linuxserver/jackett
+    restart: unless-stopped
+    environment:
+     - PUID=1005
+     - PGID=1008
+     - TZ=America/New_York
+    volumes:
+     - /etc/localtime:/etc/localtime:ro
+     - /opt/jackett/downloads:/downloads
+     - /opt/jackett/config:/config
+    depends_on:
+     - wireguard
+    network_mode: service:wireguard
+
+  sonarr:
+    container_name: sonarr
+    image: ghcr.io/linuxserver/sonarr
+    restart: unless-stopped
+    environment:
+     - TZ=America/New_York
+     - PUID=1001
+     - PGID=1008
+    volumes:
+     - /etc/localtime:/etc/localtime:ro
+     - /opt/sonarr/NzbDrone:/config
+     - /mnt/share/tvshows:/tv
+     - /mnt/share/torrents:/downloads
+    depends_on:
+     - wireguard
+    network_mode: service:wireguard
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:develop
+    container_name: prowlarr
+    environment:
+      - PUID=1005
+      - PGID=1008
+      - TZ=America/New_York
+    volumes:
+      - /opt/prowlarr/config:/config
+    restart: unless-stopped
+    depends_on:
+     - wireguard
+    network_mode: service:wireguard
